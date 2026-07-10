@@ -5,12 +5,12 @@ const CONTENT = {
   materi: {
     emoji: "📚",
     title: "Kuota Latihan Gratis Habis",
-    desc: `Kamu sudah mengerjakan ${FREE_QUESTION_LIMIT_TOTAL} soal gratis. Upgrade ke Premium untuk akses unlimited semua soal.`,
+    desc: "Kamu sudah mengerjakan ${FREE_QUESTION_LIMIT_TOTAL} soal gratis. Upgrade ke Premium untuk akses unlimited semua soal.",
   },
   cat_quota: {
     emoji: "🎯",
     title: "Kuota Simulasi CAT Gratis Habis",
-    desc: `Kamu sudah menggunakan ${FREE_CAT_TOTAL_ATTEMPTS} percobaan CAT gratis. Upgrade ke Premium untuk simulasi CAT unlimited.`,
+    desc: "Kamu sudah menggunakan ${FREE_CAT_TOTAL_ATTEMPTS} percobaan CAT gratis. Upgrade ke Premium untuk simulasi CAT unlimited.",
   },
   cat_locked: {
     emoji: "🔒",
