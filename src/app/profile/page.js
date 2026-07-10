@@ -15,7 +15,6 @@ export default function ProfilePage() {
   const [message, setMessage] = useState(null);
   const [premiumStatus, setPremiumStatus] = useState({ isActive: false, premiumUntil: null });
   const [remainingQuota, setRemainingQuota] = useState(0);
-  const [totalSubLabels, setTotalSubLabels] = useState(0);
   const [totalSeen, setTotalSeen] = useState(0);
 
   useEffect(() => {
@@ -31,14 +30,6 @@ export default function ProfilePage() {
       const status = await getPremiumStatus(user.id);
       setPremiumStatus(status);
 
-      // Get total sub labels (distinct from daftar_subtopik)
-      const { data: subs } = await supabase
-        .from("daftar_subtopik")
-        .select("sub_label", { distinct: true });
-      const totalSubs = subs?.length || 0;
-      setTotalSubLabels(totalSubs);
-      const totalQuota = totalSubs * FREE_QUESTION_LIMIT; // 20 per sub
-
       // Get total unique questions seen by user
       const { data: logs } = await supabase
         .from("quiz_logs")
@@ -46,7 +37,7 @@ export default function ProfilePage() {
         .eq("user_id", user.id);
       const seenCount = logs?.length || 0;
       setTotalSeen(seenCount);
-      const remaining = Math.max(0, totalQuota - seenCount);
+      const remaining = Math.max(0, FREE_QUESTION_LIMIT_TOTAL - seenCount);
       setRemainingQuota(remaining);
 
       setLoading(false);
@@ -151,10 +142,8 @@ export default function ProfilePage() {
                     <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, color: "var(--gray-700)" }}>FREE</span>
                   </div>
                   <div style={{ fontSize: "0.85rem", color: "var(--gray-600)", marginTop: "4px" }}>
-                    Sisa kuota token: <strong>{remainingQuota}</strong> soal
-                    <span style={{ fontSize: "0.75rem", color: "var(--gray-400)", marginLeft: "4px" }}>
-                      (dari {totalSubLabels * FREE_QUESTION_LIMIT} total)
-                    </span>
+                    Sisa kuota: <strong>{remainingQuota}</strong> soal dari {FREE_QUESTION_LIMIT_TOTAL}
+                    {totalSeen > 0 && <span style={{ fontSize: "0.75rem", color: "var(--gray-400)", marginLeft: "4px" }}>(sudah dikerjakan {totalSeen})</span>}
                   </div>
                 </div>
               )}
