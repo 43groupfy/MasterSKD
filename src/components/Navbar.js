@@ -32,6 +32,10 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
             <span>⭐</span>
             <span>Premium</span>
           </Link>
+          <Link href="/profile" className="streak-badge" style={{ color: "var(--blue-dark)", background: "var(--blue-light)", borderColor: "rgba(28,176,246,.2)", textDecoration: "none" }}>
+            <span>👤</span>
+            <span>Profil</span>
+          </Link>
         </div>
       </div>
     </nav>
