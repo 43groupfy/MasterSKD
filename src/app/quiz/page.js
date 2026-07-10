@@ -3,7 +3,14 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Navbar from "../../components/Navbar";
+import UpgradeModal from "../../components/UpgradeModal";
 import { getLevelProgress } from "../../lib/exp";
+import {
+  getPremiumStatus,
+  getAllSeenQuestionIds,
+  materiUsageCount,
+  FREE_QUESTION_LIMIT,
+} from "../../lib/premium";
 
 const LABELS = [
   { code: "TWK", name: "Tes Wawasan Kebangsaan", emoji: "🇮🇩", color: "var(--blue)", bg: "var(--blue-light)", border: "var(--blue)", pill: "pill--blue" },
@@ -19,6 +26,9 @@ export default function QuizPage() {
   const [levelData, setLevelData] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
+  const [seenMap, setSeenMap] = useState({});
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -40,10 +50,14 @@ export default function QuizPage() {
       setSubtopics(subsArr);
 
       // Load user progress
-      const [progressRes, levelRes] = await Promise.all([
+      const [progressRes, levelRes, premiumStatus, seen] = await Promise.all([
         supabase.from("user_progress").select("*").eq("user_id", user.id),
         supabase.from("user_level").select("*").eq("user_id", user.id).single(),
+        getPremiumStatus(user.id),
+        getAllSeenQuestionIds(user.id),
       ]);
+      setIsPremium(premiumStatus.isActive);
+      setSeenMap(seen);
       
       let calculatedTotalExp = 0;
       const pm = {};
@@ -75,6 +89,10 @@ export default function QuizPage() {
   }, [router]);
 
   const goQuiz = (label, sub) => {
+    if (!isPremium && sub !== "all" && materiUsageCount(seenMap, label, sub) >= FREE_QUESTION_LIMIT) {
+      setShowUpgrade(true);
+      return;
+    }
     router.push(`/quiz/${label}?sub=${encodeURIComponent(sub)}`);
   };
 
@@ -163,15 +181,23 @@ export default function QuizPage() {
 
                       {subs.map(sub => {
                         const exp = progress[`${label.code}__${sub}`] || 0;
+                        const usedCount = materiUsageCount(seenMap, label.code, sub);
+                        const isLocked = !isPremium && usedCount >= FREE_QUESTION_LIMIT;
                         return (
                           <button
                             key={sub}
                             onClick={() => goQuiz(label.code, sub)}
-                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: "var(--radius-md)", border: "2px solid var(--gray-200)", background: "var(--white)", cursor: "pointer", marginBottom: "4px", textAlign: "left" }}
+                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: "var(--radius-md)", border: isLocked ? "2px solid var(--yellow-dark)" : "2px solid var(--gray-200)", background: isLocked ? "var(--yellow-light)" : "var(--white)", cursor: "pointer", marginBottom: "4px", textAlign: "left" }}
                           >
-                            <span style={{ fontSize: "0.9rem", color: "var(--gray-800)", fontWeight: 500 }}>{sub}</span>
+                            <span style={{ fontSize: "0.9rem", color: "var(--gray-800)", fontWeight: 500, display: "flex", alignItems: "center", gap: "6px" }}>
+                              {sub}
+                              {isLocked && <span className="pill" style={{ background: "var(--yellow-dark)", color: "var(--white)", fontSize: "0.65rem" }}>🔒 Premium</span>}
+                            </span>
                             <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.78rem", color: "var(--gray-500)", flexShrink: 0 }}>
-                              {exp > 0 ? <span style={{ color: label.color }}>⚡{exp} EXP</span> : "Belum dimulai"}
+                              {isPremium
+                                ? (exp > 0 ? <span style={{ color: label.color }}>⚡{exp} EXP</span> : "Belum dimulai")
+                                : <span style={{ color: isLocked ? "var(--yellow-dark)" : "var(--gray-500)" }}>{usedCount}/{FREE_QUESTION_LIMIT} soal</span>
+                              }
                             </span>
                           </button>
                         );
@@ -188,6 +214,7 @@ export default function QuizPage() {
           </div>
         </div>
       </main>
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="materi" />
     </>
   );
 }

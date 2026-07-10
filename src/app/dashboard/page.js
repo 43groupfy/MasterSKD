@@ -4,8 +4,15 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
+import UpgradeModal from "../../components/UpgradeModal";
 import { getLevelProgress } from "../../lib/exp";
 import { formatDate } from "../../lib/utils";
+import {
+  getPremiumStatus,
+  getAllSeenQuestionIds,
+  materiUsageCount,
+  FREE_QUESTION_LIMIT,
+} from "../../lib/premium";
 
 const LABEL_INFO = {
   TWK: { code: "TWK", name: "Tes Wawasan Kebangsaan", emoji: "🇮🇩", color: "var(--blue)", bg: "var(--blue-light)", border: "var(--blue)", pill: "pill--blue" },
@@ -28,6 +35,9 @@ export default function DashboardPage() {
   const [expanded, setExpanded] = useState(null);
   const [subtopics, setSubtopics] = useState({});
   const [progressMap, setProgressMap] = useState({});
+  const [isPremium, setIsPremium] = useState(false);
+  const [seenMap, setSeenMap] = useState({});
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -38,12 +48,16 @@ export default function DashboardPage() {
       setUser(user);
 
       // Fetch Data Paralel (Limit dinaikkan ke 6 untuk mendeteksi apakah ada lebih dari 5 riwayat)
-      const [levelRes, progressRes, historyRes, subRes] = await Promise.all([
+      const [levelRes, progressRes, historyRes, subRes, premiumStatus, seen] = await Promise.all([
         supabase.from("user_level").select("*").eq("user_id", user.id).single(),
         supabase.from("user_progress").select("*").eq("user_id", user.id),
         supabase.from("exam_history").select("*, exam_packages(name)").eq("user_id", user.id).order("completed_at", { ascending: false }).limit(6),
-        supabase.from("daftar_subtopik").select("label, sub_label")
+        supabase.from("daftar_subtopik").select("label, sub_label"),
+        getPremiumStatus(user.id),
+        getAllSeenQuestionIds(user.id),
       ]);
+      setIsPremium(premiumStatus.isActive);
+      setSeenMap(seen);
 
       // 1. Map Daftar Subtopik
       const subs = {};
@@ -133,6 +147,21 @@ export default function DashboardPage() {
             <h1 style={{ marginBottom: "4px" }}>Halo, {displayName}! 👋</h1>
             <p style={{ color: "var(--gray-500)" }}>Ayo lanjutkan latihan hari ini!</p>
           </div>
+
+          {!isPremium && (
+            <a href="/premium" style={{ textDecoration: "none" }}>
+              <div className="card card--hover" style={{ background: "var(--yellow-light)", border: "2px solid var(--yellow-dark)", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "1.4rem" }}>⭐</span>
+                  <div>
+                    <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, color: "var(--yellow-dark)", fontSize: "0.9rem" }}>Upgrade ke Premium</div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--gray-600)" }}>Buka seluruh bank soal & simulasi CAT tanpa batas</div>
+                  </div>
+                </div>
+                <span className="pill" style={{ background: "var(--yellow-dark)", color: "var(--white)" }}>Lihat →</span>
+              </div>
+            </a>
+          )}
 
           {/* XP Level Card */}
           <div className="card" style={{ background: "linear-gradient(135deg, var(--gray-900), #2d2d2d)", border: "none", marginBottom: "24px" }}>
@@ -244,15 +273,26 @@ export default function DashboardPage() {
                         {/* Subtopik */}
                         {subs.map(sub => {
                           const exp = progressMap[`${labelCode}__${sub}`] || 0;
+                          const usedCount = materiUsageCount(seenMap, labelCode, sub);
+                          const isLocked = !isPremium && usedCount >= FREE_QUESTION_LIMIT;
                           return (
                             <button
                               key={sub}
-                              onClick={() => router.push(`/quiz/${labelCode}?sub=${encodeURIComponent(sub)}`)}
-                              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: "var(--radius-md)", border: "2px solid var(--gray-200)", background: "var(--white)", cursor: "pointer", marginBottom: "6px", textAlign: "left" }}
+                              onClick={() => {
+                                if (isLocked) { setShowUpgrade(true); return; }
+                                router.push(`/quiz/${labelCode}?sub=${encodeURIComponent(sub)}`);
+                              }}
+                              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: "var(--radius-md)", border: isLocked ? "2px solid var(--yellow-dark)" : "2px solid var(--gray-200)", background: isLocked ? "var(--yellow-light)" : "var(--white)", cursor: "pointer", marginBottom: "6px", textAlign: "left" }}
                             >
-                              <span style={{ fontSize: "0.9rem", color: "var(--gray-800)", fontWeight: 500 }}>{sub}</span>
+                              <span style={{ fontSize: "0.9rem", color: "var(--gray-800)", fontWeight: 500, display: "flex", alignItems: "center", gap: "6px" }}>
+                                {sub}
+                                {isLocked && <span className="pill" style={{ background: "var(--yellow-dark)", color: "var(--white)", fontSize: "0.65rem" }}>🔒 Premium</span>}
+                              </span>
                               <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.78rem", color: "var(--gray-500)", flexShrink: 0 }}>
-                                {exp > 0 ? <span style={{ color: info.color }}>⚡{exp} EXP</span> : "Belum dimulai"}
+                                {isPremium
+                                  ? (exp > 0 ? <span style={{ color: info.color }}>⚡{exp} EXP</span> : "Belum dimulai")
+                                  : <span style={{ color: isLocked ? "var(--yellow-dark)" : "var(--gray-500)" }}>{usedCount}/{FREE_QUESTION_LIMIT} soal</span>
+                                }
                               </span>
                             </button>
                           );
@@ -314,6 +354,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="materi" />
     </>
   );
 }

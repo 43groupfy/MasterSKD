@@ -6,6 +6,13 @@ import { calculateQuizEXP, getLevelProgress } from "../../../lib/exp";
 import { parseOptions, getMaxValue, isAnswerCorrect } from "../../../lib/scoring";
 import { OPTION_LABELS, LABEL_STYLE } from "../../../lib/utils";
 import QuizFeedback from "../../../components/QuizFeedback";
+import UpgradeModal from "../../../components/UpgradeModal";
+import {
+  getPremiumStatus,
+  getAllSeenQuestionIds,
+  buildFreeQuestionPool,
+  hasAnyRemainingQuota,
+} from "../../../lib/premium";
 
 const QUIZ_COUNT = 10;
 
@@ -31,25 +38,55 @@ function QuizContent() {
   // State Exit Confirmation
   const [showExitPopup, setShowExitPopup] = useState(false);
 
+  // State Premium Gating
+  const [isPremium, setIsPremium] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const loadQuestions = async (currentUser) => {
+    const { isActive: premium } = await getPremiumStatus(currentUser.id);
+    setIsPremium(premium);
+
+    let query = supabase.from("questions").select("*").eq("label", label);
+    if (subParam !== "all") query = query.eq("sub_label", subParam);
+    const { data } = await query;
+    if (!data || data.length === 0) { setBlocked(false); setQuestions([]); setLoading(false); return; }
+
+    let pool = data;
+    if (!premium) {
+      const seenMap = await getAllSeenQuestionIds(currentUser.id, label);
+      const seenForLabel = seenMap[label] || {};
+
+      const stillHasQuota = subParam === "all"
+        ? hasAnyRemainingQuota(data, seenForLabel)
+        : (seenForLabel[subParam]?.size || 0) < 20;
+
+      if (!stillHasQuota) {
+        setBlocked(true);
+        setQuestions([]);
+        setLoading(false);
+        return;
+      }
+      pool = buildFreeQuestionPool(data, seenForLabel);
+      if (pool.length === 0) { setBlocked(true); setQuestions([]); setLoading(false); return; }
+    }
+
+    setBlocked(false);
+    const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, QUIZ_COUNT);
+    const parsed = shuffled.map(q => ({
+      ...q,
+      options: typeof q.options === "string" ? JSON.parse(q.options) : (q.options || []),
+    }));
+    setQuestions(parsed);
+    setLoading(false);
+  };
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setUser(user);
-
-      // Load random questions
-      let query = supabase.from("questions").select("*").eq("label", label);
-      if (subParam !== "all") query = query.eq("sub_label", subParam);
-      const { data } = await query;
-      if (!data || data.length === 0) { setLoading(false); return; }
-
-      const shuffled = data.sort(() => Math.random() - 0.5).slice(0, QUIZ_COUNT);
-      const parsed = shuffled.map(q => ({
-        ...q,
-        options: typeof q.options === "string" ? JSON.parse(q.options) : (q.options || []),
-      }));
-      setQuestions(parsed);
-      setLoading(false);
+      await loadQuestions(user);
     };
     init();
   }, [label, subParam]);
@@ -152,32 +189,39 @@ function QuizContent() {
   };
 
   const handleRestartQuiz = async () => {
+    if (!user) return;
     setLoading(true);
     setPhase("question");
     setCurrentIndex(0);
     setSelectedIndex(null);
     setStreaks({}); // Reset seluruh streak saat mulai quiz baru
     setResults([]);
-
-    let query = supabase.from("questions").select("*").eq("label", label);
-    if (subParam !== "all") query = query.eq("sub_label", subParam);
-    const { data } = await query;
-    
-    if (data && data.length > 0) {
-      const shuffled = data.sort(() => Math.random() - 0.5).slice(0, QUIZ_COUNT);
-      const parsed = shuffled.map(q => ({
-        ...q,
-        options: typeof q.options === "string" ? JSON.parse(q.options) : (q.options || []),
-      }));
-      setQuestions(parsed);
-    }
-    setLoading(false);
+    await loadQuestions(user);
   };
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
       <div className="anim-pulse" style={{ fontSize: "3rem", textAlign: "center" }}>⚡</div>
     </div>
+  );
+
+  if (blocked) return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: "20px" }}>
+        <div style={{ textAlign: "center", maxWidth: "360px" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "16px" }}>🔒</div>
+          <h3 style={{ marginBottom: "8px" }}>Kuota Latihan Gratis Habis</h3>
+          <p style={{ color: "var(--gray-500)", marginBottom: "20px", fontSize: "0.9rem", lineHeight: 1.6 }}>
+            Kamu sudah mencapai batas 20 soal gratis untuk materi ini. Progress kamu tetap tersimpan.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <button onClick={() => setShowUpgrade(true)} className="btn btn--yellow btn--block">⭐ Upgrade Premium</button>
+            <button onClick={confirmExit} className="btn btn--ghost btn--block">← Pilih Materi Lain</button>
+          </div>
+        </div>
+      </div>
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="materi" />
+    </>
   );
 
   if (questions.length === 0) return (
