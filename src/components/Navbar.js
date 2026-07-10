@@ -1,8 +1,9 @@
+// components/Navbar.js
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase"; // sesuaikan path jika perlu
+import { supabase } from "../lib/supabase"; // Sesuaikan path jika perlu
 
 export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) {
   const pathname = usePathname();
@@ -17,42 +18,54 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
     };
     checkSession();
 
-    // Optional: subscribe ke perubahan auth (misal logout)
+    // Subscribe ke perubahan auth (misal logout dari tab lain)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
+
     return () => {
       listener?.subscription?.unsubscribe();
     };
   }, []);
 
-  // Sembunyikan navbar di halaman test
+  // Sembunyikan navbar di halaman test (mode ujian)
   if (pathname?.startsWith("/test")) return null;
 
   return (
     <nav className="navbar">
       <div className="container navbar__inner">
+        {/* Brand / Logo */}
         <Link href="/" className="navbar__brand">
           <div className="navbar__logo">
             <span className="navbar__logo-text">SKD</span>
           </div>
           <span className="navbar__title">PlaySKD</span>
         </Link>
+
+        {/* Right side */}
         <div className="navbar__nav">
+          {/* Statistik (XP & Streak) hanya jika showStats true */}
           {showStats && (
             <>
               <div className="streak-badge">
                 <span>🔥</span>
                 <span>{streak}</span>
               </div>
-              <div className="streak-badge" style={{ color: "var(--purple-dark)", background: "var(--purple-light)", borderColor: "rgba(168,85,247,.2)" }}>
+              <div
+                className="streak-badge"
+                style={{
+                  color: "var(--purple-dark)",
+                  background: "var(--purple-light)",
+                  borderColor: "rgba(168,85,247,.2)",
+                }}
+              >
                 <span>⚡</span>
                 <span>{totalExp} XP</span>
               </div>
             </>
           )}
 
-          {/* Tampilkan hanya jika user sudah login */}
+          {/* Link Profil & Premium — hanya muncul jika user sudah login */}
           {!loading && isLoggedIn && (
             <>
               <Link
