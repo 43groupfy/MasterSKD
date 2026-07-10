@@ -28,34 +28,9 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
               </div>
             </>
           )}
-
-          {/* Link ke Profil */}
-          <Link
-            href="/profile"
-            className="streak-badge"
-            style={{
-              color: "var(--blue-dark)",
-              background: "var(--blue-light)",
-              borderColor: "rgba(28,176,246,.2)",
-              textDecoration: "none",
-            }}
-          >
-            <span>👤</span>
-            <span className="hide-mobile">Profil</span>
-          </Link>
-
-          <Link
-            href="/premium"
-            className="streak-badge"
-            style={{
-              color: "var(--yellow-dark)",
-              background: "var(--yellow-light)",
-              borderColor: "rgba(217,119,6,.25)",
-              textDecoration: "none",
-            }}
-          >
+          <Link href="/premium" className="streak-badge" style={{ color: "var(--yellow-dark)", background: "var(--yellow-light)", borderColor: "rgba(217,119,6,.25)", textDecoration: "none" }}>
             <span>⭐</span>
-            <span className="hide-mobile">Premium</span>
+            <span>Premium</span>
           </Link>
         </div>
       </div>
