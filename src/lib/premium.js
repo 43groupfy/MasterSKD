@@ -1,11 +1,13 @@
+// lib/premium.js
 /**
- * Premium System v2.0 — logic gating Freemium sesuai PRD.
- * Semua status divalidasi dari data server (Supabase). Client hanya membaca.
+ * Premium System v2.1 — Gating Freemium sesuai PRD.
+ * - Kuota latihan soal: 200 total (akumulasi unik question_id)
+ * - Kuota CAT gratis: 4 total percobaan (bebas distribusi)
  */
 import { supabase } from "./supabase";
 
-export const FREE_QUESTION_LIMIT = 20;      // max soal unik per materi (sub_label) untuk FREE
-export const FREE_CAT_TOTAL_ATTEMPTS = 5;   // max total percobaan CAT gratis untuk FREE
+export const FREE_QUESTION_LIMIT_TOTAL = 200;  // total soal unik yang boleh dilihat FREE
+export const FREE_CAT_TOTAL_ATTEMPTS = 4;      // max total percobaan CAT gratis
 
 // ── PREMIUM STATUS ───────────────────────────────────────────────────────
 export async function getPremiumStatus(userId) {
@@ -22,8 +24,17 @@ export async function getPremiumStatus(userId) {
   return { premium, premiumUntil, isActive };
 }
 
-// ── PENGGUNAAN SOAL (untuk batas 20 soal/materi) ─────────────────────────
-// Mengembalikan { [label]: { [sub_label]: Set(question_id) } }
+// ── TOTAL PENGGUNAAN SOAL (untuk batas 200 total) ─────────────────────
+// Menghitung total soal unik yang pernah dilihat user (seluruh label & sub)
+export async function getTotalSeenQuestionCount(userId) {
+  const { data } = await supabase
+    .from("quiz_logs")
+    .select("question_id", { distinct: true })
+    .eq("user_id", userId);
+  return data?.length || 0;
+}
+
+// Untuk keperluan pool building, kita ambil semua question_id yang sudah pernah dilihat
 export async function getAllSeenQuestionIds(userId, label = null) {
   let query = supabase.from("quiz_logs").select("question_id, label, sub_label").eq("user_id", userId);
   if (label) query = query.eq("label", label);
@@ -38,46 +49,47 @@ export async function getAllSeenQuestionIds(userId, label = null) {
   return map;
 }
 
+// Untuk pengecekan kuota di level sub (kita tetap pakai untuk tampilan, tapi gating global)
 export function materiUsageCount(seenMap, label, subLabel) {
   return seenMap?.[label]?.[subLabel]?.size || 0;
 }
 
-export function isMateriLocked(seenMap, label, subLabel, isPremiumActive) {
-  if (isPremiumActive) return false;
-  return materiUsageCount(seenMap, label, subLabel) >= FREE_QUESTION_LIMIT;
+// Cek apakah kuota total masih tersisa
+export async function hasRemainingFreeQuota(userId) {
+  const seenCount = await getTotalSeenQuestionCount(userId);
+  return seenCount < FREE_QUESTION_LIMIT_TOTAL;
 }
 
-// Membangun kumpulan soal untuk sesi latihan FREE, menghormati batas 20
-// soal unik PER sub_label. Soal yang sudah pernah dikerjakan tidak dihitung
-// ulang, tapi juga tidak lagi ditawarkan sebagai "soal baru" setelah kuota
-// materinya habis.
+// Membangun pool soal untuk FREE: batasi total soal yang akan ditampilkan agar
+// total unik yang dilihat <= 200. Soal yang sudah pernah dilihat tidak dimasukkan.
+// Fungsi ini akan mengambil soal baru sebanyak mungkin sampai mencapai batas 200.
 export function buildFreeQuestionPool(allQuestions, seenMapForLabel) {
-  const bySub = {};
-  allQuestions.forEach((q) => {
-    (bySub[q.sub_label] = bySub[q.sub_label] || []).push(q);
+  // Hitung total yang sudah dilihat dari semua label
+  let totalSeen = 0;
+  Object.values(seenMapForLabel).forEach(subMap => {
+    Object.values(subMap).forEach(set => { totalSeen += set.size; });
   });
 
-  let pool = [];
-  Object.entries(bySub).forEach(([sub, qs]) => {
-    const seenSet = seenMapForLabel?.[sub] || new Set();
-    const allowedNew = Math.max(0, FREE_QUESTION_LIMIT - seenSet.size);
-    if (allowedNew <= 0) return; // materi ini sudah habis kuotanya
-    const newQs = qs.filter((q) => !seenSet.has(q.id));
-    const shuffled = newQs.sort(() => Math.random() - 0.5);
-    pool.push(...shuffled.slice(0, allowedNew));
+  const remaining = Math.max(0, FREE_QUESTION_LIMIT_TOTAL - totalSeen);
+  if (remaining <= 0) return [];
+
+  // Ambil soal baru (belum pernah dilihat) secara acak sebanyak remaining
+  const seenIds = new Set();
+  Object.values(seenMapForLabel).forEach(subMap => {
+    Object.values(subMap).forEach(set => {
+      set.forEach(id => seenIds.add(id));
+    });
   });
 
-  return pool.sort(() => Math.random() - 0.5);
+  const newQuestions = allQuestions.filter(q => !seenIds.has(q.id));
+  const shuffled = newQuestions.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, remaining);
 }
 
-export function hasAnyRemainingQuota(allQuestions, seenMapForLabel) {
-  const bySub = {};
-  allQuestions.forEach((q) => {
-    (bySub[q.sub_label] = bySub[q.sub_label] || []).push(q);
-  });
-  return Object.keys(bySub).some(
-    (sub) => (seenMapForLabel?.[sub]?.size || 0) < FREE_QUESTION_LIMIT
-  );
+// Cek apakah user masih punya kuota (untuk tombol quiz)
+export async function canDoFreeQuiz(userId) {
+  const seenCount = await getTotalSeenQuestionCount(userId);
+  return seenCount < FREE_QUESTION_LIMIT_TOTAL;
 }
 
 // ── AKSES PAKET CAT ──────────────────────────────────────────────────────
@@ -97,7 +109,6 @@ export async function getCatAccess(userId) {
   return { ...profile, totalFreeAttempts, attemptsByPackage, purchasedIds };
 }
 
-// Mengembalikan { allowed: boolean, reason?: 'free_quota' | 'locked_premium' | 'not_purchased' }
 export function canStartPackage(pkg, access) {
   if (access.isActive) {
     if (pkg.tier === "addon") {
