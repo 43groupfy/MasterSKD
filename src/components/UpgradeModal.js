@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation";
 const CONTENT = {
   materi: {
     emoji: "📚",
-    title: "Kuota Latihan Materi Habis",
-    desc: "Kamu sudah mengerjakan 20 soal gratis pada materi ini. Progress kamu tetap tersimpan — upgrade ke Premium untuk membuka seluruh bank soal tanpa batas di semua materi.",
+    title: "Kuota Latihan Gratis Habis",
+    desc: `Kamu sudah mengerjakan ${FREE_QUESTION_LIMIT_TOTAL} soal gratis. Upgrade ke Premium untuk akses unlimited semua soal.`,
   },
   cat_quota: {
     emoji: "🎯",
     title: "Kuota Simulasi CAT Gratis Habis",
-    desc: "Kamu sudah menggunakan 5 dari 5 percobaan CAT gratis. Upgrade ke Premium untuk simulasi CAT unlimited attempt pada paket bawaan Premium.",
+    desc: `Kamu sudah menggunakan ${FREE_CAT_TOTAL_ATTEMPTS} percobaan CAT gratis. Upgrade ke Premium untuk simulasi CAT unlimited.`,
   },
   cat_locked: {
     emoji: "🔒",
