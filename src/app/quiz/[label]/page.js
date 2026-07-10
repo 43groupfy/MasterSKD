@@ -43,43 +43,48 @@ function QuizContent() {
   const [blocked, setBlocked] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
-  const loadQuestions = async (currentUser) => {
-    const { isActive: premium } = await getPremiumStatus(currentUser.id);
-    setIsPremium(premium);
+const loadQuestions = async (currentUser) => {
+  const { isActive: premium } = await getPremiumStatus(currentUser.id);
+  setIsPremium(premium);
 
-    let query = supabase.from("questions").select("*").eq("label", label);
-    if (subParam !== "all") query = query.eq("sub_label", subParam);
-    const { data } = await query;
-    if (!data || data.length === 0) { setBlocked(false); setQuestions([]); setLoading(false); return; }
+  let query = supabase.from("questions").select("*").eq("label", label);
+  if (subParam !== "all") query = query.eq("sub_label", subParam);
+  const { data } = await query;
+  if (!data || data.length === 0) { setBlocked(false); setQuestions([]); setLoading(false); return; }
 
-    let pool = data;
-    if (!premium) {
-      const seenMap = await getAllSeenQuestionIds(currentUser.id, label);
-      const seenForLabel = seenMap[label] || {};
+  let pool = data;
+  if (!premium) {
+    // Ambil semua soal yang pernah dilihat user (tanpa filter label, untuk perhitungan total)
+    const { data: allSeen } = await supabase
+      .from("quiz_logs")
+      .select("question_id", { distinct: true })
+      .eq("user_id", currentUser.id);
+    const seenCount = allSeen?.length || 0;
 
-      const stillHasQuota = subParam === "all"
-        ? hasAnyRemainingQuota(data, seenForLabel)
-        : (seenForLabel[subParam]?.size || 0) < 20;
-
-      if (!stillHasQuota) {
-        setBlocked(true);
-        setQuestions([]);
-        setLoading(false);
-        return;
-      }
-      pool = buildFreeQuestionPool(data, seenForLabel);
-      if (pool.length === 0) { setBlocked(true); setQuestions([]); setLoading(false); return; }
+    if (seenCount >= FREE_QUESTION_LIMIT_TOTAL) {
+      setBlocked(true);
+      setQuestions([]);
+      setLoading(false);
+      return;
     }
 
-    setBlocked(false);
-    const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, QUIZ_COUNT);
-    const parsed = shuffled.map(q => ({
-      ...q,
-      options: typeof q.options === "string" ? JSON.parse(q.options) : (q.options || []),
-    }));
-    setQuestions(parsed);
-    setLoading(false);
-  };
+    // Buat map seen untuk filter soal yang sudah dilihat
+    const seenIds = new Set(allSeen?.map(r => r.question_id) || []);
+    const newQuestions = data.filter(q => !seenIds.has(q.id));
+    const shuffled = newQuestions.sort(() => Math.random() - 0.5);
+    const remaining = FREE_QUESTION_LIMIT_TOTAL - seenCount;
+    pool = shuffled.slice(0, Math.min(remaining, QUIZ_COUNT));
+    if (pool.length === 0) { setBlocked(true); setQuestions([]); setLoading(false); return; }
+  }
+
+  setBlocked(false);
+  const parsed = pool.map(q => ({
+    ...q,
+    options: typeof q.options === "string" ? JSON.parse(q.options) : (q.options || []),
+  }));
+  setQuestions(parsed);
+  setLoading(false);
+};
 
   useEffect(() => {
     const init = async () => {
