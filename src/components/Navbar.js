@@ -44,7 +44,7 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
         </Link>
 
         {/* Right side */}
-        <div className="navbar__nav">
+        <div className="navbar__nav" hidden>
           {showStats && (
             <>
               <div className="streak-badge">
