@@ -1,9 +1,32 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase"; // sesuaikan path jika perlu
 
 export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) {
   const pathname = usePathname();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      setIsLoggedIn(!!data.session);
+      setLoading(false);
+    };
+    checkSession();
+
+    // Optional: subscribe ke perubahan auth (misal logout)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+    return () => {
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  // Sembunyikan navbar di halaman test
   if (pathname?.startsWith("/test")) return null;
 
   return (
@@ -28,22 +51,39 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
               </div>
             </>
           )}
-          <Link href="/premium" className="streak-badge" style={{ color: "var(--yellow-dark)", background: "var(--yellow-light)", borderColor: "rgba(217,119,6,.25)", textDecoration: "none" }}>
-            <span>⭐</span>
-            <span>Premium</span>
-          </Link>
-          <Link href="/profile"
-            className="streak-badge"
-            style={{
-              color: "var(--blue-dark)",
-              background: "var(--blue-light)",
-              borderColor: "rgba(28,176,246,.2)",
-              textDecoration: "none",
-            }}
-          >
-            <span>👤</span>
-            <span className="hide-mobile">Profil</span>
-          </Link>
+
+          {/* Tampilkan hanya jika user sudah login */}
+          {!loading && isLoggedIn && (
+            <>
+              <Link
+                href="/profile"
+                className="streak-badge"
+                style={{
+                  color: "var(--blue-dark)",
+                  background: "var(--blue-light)",
+                  borderColor: "rgba(28,176,246,.2)",
+                  textDecoration: "none",
+                }}
+              >
+                <span>👤</span>
+                <span className="hide-mobile">Profil</span>
+              </Link>
+
+              <Link
+                href="/premium"
+                className="streak-badge"
+                style={{
+                  color: "var(--yellow-dark)",
+                  background: "var(--yellow-light)",
+                  borderColor: "rgba(217,119,6,.25)",
+                  textDecoration: "none",
+                }}
+              >
+                <span>⭐</span>
+                <span className="hide-mobile">Premium</span>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </nav>
