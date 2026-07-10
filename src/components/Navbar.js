@@ -1,9 +1,8 @@
-// components/Navbar.js
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase"; // Sesuaikan path jika perlu
+import { supabase } from "../lib/supabase";
 
 export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) {
   const pathname = usePathname();
@@ -18,7 +17,6 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
     };
     checkSession();
 
-    // Subscribe ke perubahan auth (misal logout dari tab lain)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
@@ -28,13 +26,16 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
     };
   }, []);
 
-  // Sembunyikan navbar di halaman test (mode ujian)
+  // Sembunyikan navbar di halaman test
   if (pathname?.startsWith("/test")) return null;
+
+  // Tentukan halaman publik: tidak boleh menampilkan link Profil & Premium
+  const isPublicPage = pathname === "/" || pathname === "/login";
 
   return (
     <nav className="navbar">
       <div className="container navbar__inner">
-        {/* Brand / Logo */}
+        {/* Brand */}
         <Link href="/" className="navbar__brand">
           <div className="navbar__logo">
             <span className="navbar__logo-text">SKD</span>
@@ -44,7 +45,6 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
 
         {/* Right side */}
         <div className="navbar__nav">
-          {/* Statistik (XP & Streak) hanya jika showStats true */}
           {showStats && (
             <>
               <div className="streak-badge">
@@ -65,8 +65,8 @@ export default function Navbar({ showStats = false, streak = 0, totalExp = 0 }) 
             </>
           )}
 
-          {/* Link Profil & Premium — hanya muncul jika user sudah login */}
-          {!loading && isLoggedIn && (
+          {/* Link Profil & Premium — hanya jika user login DAN bukan halaman publik */}
+          {!loading && isLoggedIn && !isPublicPage && (
             <>
               <Link
                 href="/profile"
