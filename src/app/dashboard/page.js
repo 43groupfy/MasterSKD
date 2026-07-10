@@ -40,6 +40,17 @@ export default function DashboardPage() {
   const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    
+    if (profile?.role === 'admin') {
+      router.push('/admin/dashboard')
+      return
+    }
+    
     const init = async () => {
       router.refresh(); 
       
