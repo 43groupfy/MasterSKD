@@ -15,14 +15,27 @@ function TestContent() {
 
   const [session, setSession] = useState(null);
   const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});     // { questionId: optionIndex }
-  const [bookmarks, setBookmarks] = useState({}); // { questionId: true }
+  const [answers, setAnswers] = useState({});
+  const [bookmarks, setBookmarks] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Deteksi mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 767);
+    };
+    
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     if (!sessionId) { router.push("/packages"); return; }
@@ -37,7 +50,6 @@ function TestContent() {
       if (ses.status === "finished") { router.push(`/result?session_id=${sessionId}`); return; }
       setSession(ses);
 
-      // Load ordered questions
       const { data: items } = await supabase
         .from("exam_package_items").select("question_id, order_number")
         .eq("package_id", ses.package_id).order("order_number");
@@ -55,7 +67,6 @@ function TestContent() {
       }));
       setQuestions(parsed);
 
-      // Load existing answers (after refresh)
       const { data: existing } = await supabase
         .from("exam_answers").select("*").eq("session_id", sessionId);
       if (existing?.length) {
@@ -175,16 +186,27 @@ function TestContent() {
               <div className="xp-bar-fill" style={{ width: `${progressPct}%` }} />
             </div>
           </div>
-          {/* Mobile grid toggle */}
-          <button onClick={() => setShowGrid(!showGrid)} className="btn btn--ghost btn--sm hide-desktop" style={{ fontSize: "0.8rem", padding: "6px 12px" }}>
-            {showGrid ? "Tutup" : "Navigator"}
-          </button>
+          {isMobile && (
+            <button onClick={() => setShowGrid(!showGrid)} className="btn btn--ghost btn--sm" style={{ fontSize: "0.8rem", padding: "6px 12px" }}>
+              {showGrid ? "Tutup" : "Navigator"}
+            </button>
+          )}
           {session && <Timer startTime={session.start_time} onTimeUp={handleFinish} />}
         </div>
       </div>
 
       {/* MAIN */}
-      <div style={{ flex: 1, maxWidth: "1140px", margin: "0 auto", width: "100%", padding: "24px 20px 100px", display: "grid", gridTemplateColumns: "1fr 280px", gap: "24px", alignItems: "start" }}>
+      <div style={{
+        flex: 1,
+        maxWidth: "1140px",
+        margin: "0 auto",
+        width: "100%",
+        padding: "24px 20px 100px",
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 280px",
+        gap: "24px",
+        alignItems: "start"
+      }}>
 
         {/* QUESTION AREA */}
         <div>
@@ -226,8 +248,8 @@ function TestContent() {
           </div>
 
           {/* Mobile grid (toggle) */}
-          {showGrid && (
-            <div className="card hide-desktop" style={{ marginTop: "20px", padding: "20px" }}>
+          {isMobile && showGrid && (
+            <div className="card" style={{ marginTop: "20px", padding: "20px" }}>
               <GridNumbers
                 questions={questions}
                 answers={answers}
@@ -241,28 +263,30 @@ function TestContent() {
         </div>
 
         {/* GRID SIDEBAR (desktop only) */}
-        <div className="card hide-mobile" style={{ padding: "20px", position: "sticky", top: "80px" }}>
-          <GridNumbers
-            questions={questions}
-            answers={answers}
-            bookmarks={bookmarks}
-            currentIndex={currentIndex}
-            isReview={false}
-            onNavigate={setCurrentIndex}
-          />
-          <div style={{ marginTop: "16px", padding: "12px 0", borderTop: "2px solid var(--gray-100)" }}>
-            <div style={{ fontSize: "0.82rem", color: "var(--gray-500)", marginBottom: "10px" }}>
-              Terjawab: <strong style={{ color: "var(--green)" }}>{answeredCount}</strong> / {questions.length}
+        {!isMobile && (
+          <div className="card" style={{ padding: "20px", position: "sticky", top: "80px" }}>
+            <GridNumbers
+              questions={questions}
+              answers={answers}
+              bookmarks={bookmarks}
+              currentIndex={currentIndex}
+              isReview={false}
+              onNavigate={setCurrentIndex}
+            />
+            <div style={{ marginTop: "16px", padding: "12px 0", borderTop: "2px solid var(--gray-100)" }}>
+              <div style={{ fontSize: "0.82rem", color: "var(--gray-500)", marginBottom: "10px" }}>
+                Terjawab: <strong style={{ color: "var(--green)" }}>{answeredCount}</strong> / {questions.length}
+              </div>
+              <button
+                onClick={handleFinish}
+                disabled={isFinishing}
+                className="btn btn--yellow btn--block"
+              >
+                {isFinishing ? "Menyimpan..." : "Selesai & Lihat Hasil 🏆"}
+              </button>
             </div>
-            <button
-              onClick={handleFinish}
-              disabled={isFinishing}
-              className="btn btn--yellow btn--block"
-            >
-              {isFinishing ? "Menyimpan..." : "Selesai & Lihat Hasil 🏆"}
-            </button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* BOTTOM NAV */}
